@@ -1,5 +1,6 @@
 import modal from "@/components/modal.vue";
 import select2 from "@/components/select2.vue";
+import { _ } from "core-js";
 import { createApp } from "vue/dist/vue.esm-bundler.js";
 
 var c = console.log.bind(document);
@@ -10,6 +11,8 @@ var commenting_quot = "";
 var commenting_step_data = {};
 var report_quot = "";
 var report_step_data = {};
+var report = "";
+var report_step = {};
 var reject_quot = "";
 var reject_step_data = {};
 var reject_quot = "";
@@ -48,39 +51,26 @@ function generateToast(message, type = "primary") {
   );
 }
 
-async function updateStepData(quot, report_step_data = null, bad = null) {
+async function updateStepData(quot, reportStepData, stepName) {
   try {
     let setdata = _.cloneDeep(quot.exam_and_order);
-    if (report_step_data != null) {
-      let name = report_step_data[0];
-      let data = report_step_data.report[0];
-
-      let rej = {
-        reject: data,
-      };
-
-      if (bad == "reject") {
+    for (let stepi in setdata.order_step_data) {
+      if (setdata.order_step_data[stepi].name == stepName && setdata.order_step_data[stepi][stepName].report) {
+        setdata.order_step_data[stepi][stepName].report.reports.push(reportStepData.step_data[stepName].report.reports[0])
+        setdata.order_step_data[stepi][stepName].report.total = setdata.order_step_data[stepi][stepName].report.total + reportStepData.step_data[stepName].report.total
       } else {
-        if (setdata.order_step_data[name] == "") {
-          setdata.order_step_data[name] = {
-            report: data,
-          };
-        } else {
-          setdata.order_step_data[name].report.amount += data.amount;
-          for (
-            let i = 0;
-            i < setdata.order_step_data[name].report.report.length;
-            i++
-          ) {
-            setdata.order_step_data[name].report.report[i].amount +=
-              data.report[i].amount;
-          }
+        if (setdata.order_step_data[stepi].name == stepName) {
+          setdata.order_step_data[stepi][stepName] = {}
+          setdata.order_step_data[stepi][stepName].report = reportStepData.step_data[stepName].report
         }
       }
     }
 
-    await db.collection("quotation").doc(vm_status.quotdata.id).set({
+    await db.collection("quotation").doc(quot.id).set({
       exam_and_order: setdata,
+    }).then(res => {
+      vm_status.quotdata = res.data
+      c(res.data.exam_and_order.order_step_data)
     });
     mainView.getQuotdata();
   } catch (err) {
@@ -89,40 +79,26 @@ async function updateStepData(quot, report_step_data = null, bad = null) {
   }
 }
 
-async function updateStepDataExam(quot, report_step_data = null, bad = null) {
+async function updateStepDataExam(quot, report_step_data, stepName) {
   try {
-    let setdata = _.cloneDeep(quot);
-    if (report_step_data != null) {
-      let name = report_step_data[0];
-      let data = report_step_data.report[0];
-
-      let rej = {
-        reject: data,
-      };
-
-      if (bad == "reject") {
+    let setdata = _.cloneDeep(quot.exam_and_order);
+    for (let stepi in setdata.sort_step_data) {
+      if (setdata.sort_step_data[stepi].name == stepName && setdata.sort_step_data[stepi][stepName].report) {
+        setdata.sort_step_data[stepi][stepName].report.reports.push(report_step_data.report.reports[0])
+        setdata.sort_step_data[stepi][stepName].report.total = setdata.sort_step_data[stepi][stepName].report.total + report_step_data.report.total
       } else {
-        if (setdata.step_data[name] == "") {
-          setdata.step_data[name] = {
-            report: data,
-          };
-        } else {
-          setdata.step_data[name].report.amount += data.amount;
-          for (
-            let i = 0;
-            i < setdata.step_data[name].report.report.length;
-            i++
-          ) {
-            setdata.step_data[name].report.report[i].amount +=
-              data.report[i].amount;
-          }
+        if (setdata.sort_step_data[stepi].name == stepName) {
+          setdata.sort_step_data[stepi][stepName] = {}
+          setdata.sort_step_data[stepi][stepName].report = report_step_data.report
         }
       }
     }
-
-    await db.collection("quotation").doc(vm_status.quotdata.id).set({
+    await db.collection("quotation").doc(quot.id).set({
       exam_and_order: setdata,
-    });
+    }).then(res => {
+      vm_status.quotdata = res.data
+      c(res.data.exam_and_order.sort_step_data)
+    })
     mainView.getQuotdata();
   } catch (err) {
     console.error(err);
@@ -2934,27 +2910,35 @@ function doapprove_byval(val, field, whichcols, whichtable) {
       status_not_done.push({ [step_list2[i][0]]: step_data2[step_list2[i][0]], "name": step_list2[i][0] })
     }
   }
-  setdata.order_step_data = status_done.concat(status_not_done)
 
-  for (let i = 0; i < setdata.order_step_data.length; i++) {
-    totalStatusSort.push({ "en": setdata.order_step_data[i].name, "th": getOrderSortStepList(setdata.order_step_data[i].name) })
+  if (setdata.order_step_data) {
+    _.merge(setdata.order_step_data, status_done.concat(status_not_done))
+
+    for (let i = 0; i < setdata.order_step_data.length; i++) {
+      totalStatusSort.push({ "en": setdata.order_step_data[i].name, "th": getOrderSortStepList(setdata.order_step_data[i].name) })
+    }
+    setdata.order_step_list = totalStatusSort
+  } else {
+    setdata.order_step_data = status_done.concat(status_not_done)
+    if (setdata.order_step_data) {
+      for (let l = 0; l < setdata.order_step_data.length; l++) {
+        totalStatusSort.push({ "en": setdata.order_step_data[l].name, "th": getSortStepList(setdata.order_step_data[l].name) })
+      }
+      setdata.order_step_list = totalStatusSort;
+    }
   }
-  setdata.order_step_list = totalStatusSort
-
-  _.merge(setdata, setdata)
-  db.collection(whichtable)
-    .doc(val.id)
-    .update({
-      [step_list]: val[step_list],
-      [step_data]: val[step_data],
-      ____note:
-        field == "approved"
-          ? val[step_data][field] && val[step_data][field].done
-            ? "อนุมัติ"
-            : "ยกเลิกการอนุมัติ"
-          : "เปลี่ยนสถานะ",
-      exam_and_order: setdata
-    })
+  
+  db.collection("quotation").doc(val.id).update({
+    [step_list]: val[step_list],
+    [step_data]: val[step_data],
+    ____note:
+      field == "approved"
+        ? val[step_data][field] && val[step_data][field].done
+          ? "อนุมัติ"
+          : "ยกเลิกการอนุมัติ"
+        : "เปลี่ยนสถานะ",
+    exam_and_order: setdata
+  })
     .then(function (res) {
       if (res.status == "success") {
         vm_status.quotdata = res.data;
@@ -3248,32 +3232,33 @@ function doapprove_byval_exam(val, field) {
     }
   }
 
-  setdata.sort_step_data = status_done.concat(status_not_done);
+  if (setdata.sort_step_data) {
+    _.merge(setdata.sort_step_data, status_done.concat(status_not_done))
 
-  for (let l = 0; l < setdata.sort_step_data.length; l++) {
-    totalStatusSort.push({ "en": setdata.sort_step_data[l].name, "th": getSortStepList(setdata.sort_step_data[l].name) })
+    for (let l = 0; l < setdata.sort_step_data.length; l++) {
+      totalStatusSort.push({ "en": setdata.sort_step_data[l].name, "th": getSortStepList(setdata.sort_step_data[l].name) })
+    }
+
+    setdata.sort_step_list = totalStatusSort;
+  } else {
+    setdata.sort_step_data = status_done.concat(status_not_done);
+    if (setdata.sort_step_data) {
+      for (let l = 0; l < setdata.sort_step_data.length; l++) {
+        totalStatusSort.push({ "en": setdata.sort_step_data[l].name, "th": getSortStepList(setdata.sort_step_data[l].name) })
+      }
+
+      setdata.sort_step_list = totalStatusSort;
+    }
   }
 
-  setdata.sort_step_list = totalStatusSort;
-
-  _.merge(setdata, setdata)
-  db.collection("quotation")
-    .doc(val.id)
-    .update({
-      exam_and_order: setdata
-    })
-    .then((res) => {
-      vm_status.quotdata = res.data;
-      c(res.data.exam_and_order)
-    })
-    .catch(function (err) {
-      alert("Approve error : " + JSON.stringify(err));
-    });
-  try {
-    mainView.$forceUpdate();
-  } catch (err) {
-    console.log(err);
-  }
+  db.collection("quotation").doc(val.id).update({
+    exam_and_order: setdata
+  }).then(res => {
+    vm_status.quotdata = res.data
+    c(res.data.exam_and_order)
+  }).catch(err => {
+    alert("Approve error : " + JSON.stringify(err));
+  });
 }
 
 async function submit_report_comment() {
@@ -3376,14 +3361,9 @@ const vm_form_app = createApp({
       return [total, total_deep];
     },
     async submit_report() {
-      let update_report = false;
-      let report_data = [];
-      let temp = 0;
-      let temp_deep = 0;
-      let report_datetime = document.getElementById("report_date").valueAsDate;
-      document.getElementById("report_date").value = new Date();
-      if (!report_step_data.report) report_step_data.report = [];
-
+      let group_amount = 0
+      let group_size = []
+      let reportStepData = _.cloneDeep(report)
       for (let i in this.size) {
         let size_report = this.size[i];
         //GET VALUE FROM FORM
@@ -3392,7 +3372,7 @@ const vm_form_app = createApp({
         );
         //CLEAR VALUE
         document.getElementById("status-size-" + this.size[i]).value = 0;
-        temp += amount_report;
+        group_amount += amount_report;
         //CREATE AN OBJECT FOR EACH SIZE
         let size_report_obj = {};
         if (this.deep_size[i][0].length > 0) {
@@ -3413,137 +3393,39 @@ const vm_form_app = createApp({
             amount: amount_report,
           };
         }
-        report_data.push(size_report_obj);
+        group_size.push(size_report_obj);
       }
+      let group_name = this.$refs['report_group_size_name'].value
 
-      let total_amount = temp;
-      let total_amount_deep = temp_deep;
-
-      for (let i in report_step_data.report) {
-        if (
-          report_step_data.report[i].for.split("T")[0] ===
-          report_datetime.toISOString().split("T")[0]
-        ) {
-          update_report = true;
-        }
-      }
-      //user change the requirement so many times after deploy to production that why...
-      // FUN WILL START HERE
-      if (update_report) {
-        for (let i in report_step_data.report) {
-          if (
-            report_step_data.report[i].for.split("T")[0] ===
-            report_datetime.toISOString().split("T")[0]
-          ) {
-            report_step_data.report[i].at = new Date();
-            report_step_data.report[i].by = auth_username;
-            report_step_data.report[i].amount += total_amount;
-            report_step_data.report[i].amountpiecesdeep += total_amount_deep;
-            for (let j in report_step_data.report[i].report) {
-              report_step_data.report[i].report[j].amount +=
-                report_data[j].amount;
-              if (
-                report_step_data.report[i].report[j].hasOwnProperty(
-                  "sizedeep"
-                ) &&
-                report_data[j].hasOwnProperty("sizedeep")
-              ) {
-                let check_n =
-                  report_step_data.report[i].report[j].sizedeep.length +
-                  report_data[j].sizedeep.length -
-                  1;
-                for (let k in report_data[j].sizedeep) {
-                  if (
-                    report_step_data.report[i].report[j].sizedeep[k].title ===
-                    report_data[j].sizedeep[k].title
-                  ) {
-                    report_step_data.report[i].report[j].sizedeep[k].amount +=
-                      parseInt(report_data[j].sizedeep[k].amount);
-                  } else {
-                    let check = true;
-                    let check_i = 0;
-                    for (let n in report_step_data.report[i].report[j]
-                      .sizedeep) {
-                      if (
-                        report_step_data.report[i].report[j].sizedeep[n]
-                          .title === report_data[j].sizedeep[k].title
-                      ) {
-                        report_step_data.report[i].report[j].sizedeep[
-                          n
-                        ].amount += parseInt(report_data[j].sizedeep[k].amount);
-                        check = true;
-                        check_i + 2;
-                        break;
-                      } else {
-                        check = false;
-                      }
-                    }
-                    if (!check && check_i < check_n) {
-                      report_step_data.report[i].report[j].sizedeep.push({
-                        title: report_data[j].sizedeep[k].title,
-                        amount: parseInt(report_data[j].sizedeep[k].amount),
-                      });
-                      check_n - 2;
-                      check_i++;
-                      console.log(
-                        "test 1",
-                        report_step_data.report[i].report[j].sizedeep
-                      );
-                    }
-                  }
-                }
-              } else if (
-                !report_step_data.report[i].report[j].hasOwnProperty(
-                  "sizedeep"
-                ) &&
-                report_data[j].sizedeep
-              ) {
-                for (let k in report_data[j].sizedeep) {
-                  if (
-                    !report_step_data.report[i].report[j].hasOwnProperty(
-                      "sizedeep"
-                    )
-                  ) {
-                    report_step_data.report[i].report[j]["sizedeep"] = [
-                      {
-                        title: report_data[j].sizedeep[k].title,
-                        amount: parseInt(report_data[j].sizedeep[k].amount),
-                      },
-                    ];
-                    console.log(
-                      "test 2",
-                      report_step_data.report[i].report[j].sizedeep
-                    );
-                  } else {
-                    report_step_data.report[i].report[j].sizedeep.push({
-                      title: report_data[j].sizedeep[k].title,
-                      amount: parseInt(report_data[j].sizedeep[k].amount),
-                    });
-                    console.log(
-                      "test 3",
-                      report_step_data.report[i].report[j].sizedeep
-                    );
-                  }
-                }
-              }
-            }
-          }
-        }
-        //FUN END HERE KEKW
-      } else {
-        report_step_data.report.push({
+      if (!reportStepData.step_data[report_step].hasOwnProperty("report")) {
+        reportStepData.step_data[report_step].report = {
           at: new Date(),
           by: auth_username,
-          for: report_datetime,
-          report: report_data,
-          amount: total_amount,
-          amountpiecesdeep: total_amount_deep,
-        });
+          reports: [{
+            name: group_name,
+            size: group_size,
+            amount: parseInt(group_amount)
+          }],
+          total: parseInt(group_amount),
+        }
+      } else {
+        if (reportStepData.step_data[report_step].report) {
+          reportStepData.step_data[report_step].report.at = new Date()
+          reportStepData.step_data[report_step].report.by = auth_username
+          reportStepData.step_data[report_step].report.reports.push({
+            name: group_name,
+            size: group_size,
+            amount: parseInt(group_amount)
+          })
+          reportStepData.step_data[report_step].report.total += parseInt(group_amount)
+        }
       }
+
       $("#report-modal").modal("hide");
-      await updateStepData(report_quot);
-      console.log(report_step_data);
-      vm_status.stepDataTotalAmount(report_step_data);
+
+      await updateStepData(report, reportStepData, report_step);
+      vm_status.stepDataTotalAmount(reportStepData);
+      this.$refs['report_group_size_name'].value = ""
     },
     close_report() {
       document.getElementById("report_date").valueAsDate = new Date();
@@ -3628,15 +3510,9 @@ const vm_form2_app = createApp({
       return [total, total_deep];
     },
     async submit_report_exam() {
-      let update_report = false;
-      let report_data = [];
-      let temp = 0;
-      let temp_deep = 0;
-      let report_datetime =
-        document.getElementById("report_exam_date").valueAsDate;
-      document.getElementById("report_exam_date").value = new Date();
-      if (!report_step_data.report) report_step_data.report = [];
-
+      let group_amount = 0
+      let group_size = []
+      let reportStepData = _.cloneDeep(report_quot.exam_and_order)
       for (let i in this.size) {
         let size_report = this.size[i];
         //GET VALUE FROM FORM
@@ -3645,7 +3521,7 @@ const vm_form2_app = createApp({
         );
         //CLEAR VALUE
         document.getElementById("status-size-exam-" + this.size[i]).value = 0;
-        temp += amount_report;
+        group_amount += amount_report;
         //CREATE AN OBJECT FOR EACH SIZE
         let size_report_obj = {};
         if (this.deep_size[i][0].length > 0) {
@@ -3666,137 +3542,39 @@ const vm_form2_app = createApp({
             amount: amount_report,
           };
         }
-        report_data.push(size_report_obj);
+        group_size.push(size_report_obj);
       }
+      let group_name = this.$refs['report_group_size_name_exam'].value
 
-      let total_amount = temp;
-      let total_amount_deep = temp_deep;
-
-      for (let i in report_step_data.report) {
-        if (
-          report_step_data.report[i].for.split("T")[0] ===
-          report_datetime.toISOString().split("T")[0]
-        ) {
-          update_report = true;
-        }
-      }
-      //user change the requirement so many times after deploy to production that why...
-      // FUN WILL START HERE
-      if (update_report) {
-        for (let i in report_step_data.report) {
-          if (
-            report_step_data.report[i].for.split("T")[0] ===
-            report_datetime.toISOString().split("T")[0]
-          ) {
-            report_step_data.report[i].at = new Date();
-            report_step_data.report[i].by = auth_username;
-            report_step_data.report[i].amount += total_amount;
-            report_step_data.report[i].amountpiecesdeep += total_amount_deep;
-            for (let j in report_step_data.report[i].report) {
-              report_step_data.report[i].report[j].amount +=
-                report_data[j].amount;
-              if (
-                report_step_data.report[i].report[j].hasOwnProperty(
-                  "sizedeep"
-                ) &&
-                report_data[j].hasOwnProperty("sizedeep")
-              ) {
-                let check_n =
-                  report_step_data.report[i].report[j].sizedeep.length +
-                  report_data[j].sizedeep.length -
-                  1;
-                for (let k in report_data[j].sizedeep) {
-                  if (
-                    report_step_data.report[i].report[j].sizedeep[k].title ===
-                    report_data[j].sizedeep[k].title
-                  ) {
-                    report_step_data.report[i].report[j].sizedeep[k].amount +=
-                      parseInt(report_data[j].sizedeep[k].amount);
-                  } else {
-                    let check = true;
-                    let check_i = 0;
-                    for (let n in report_step_data.report[i].report[j]
-                      .sizedeep) {
-                      if (
-                        report_step_data.report[i].report[j].sizedeep[n]
-                          .title === report_data[j].sizedeep[k].title
-                      ) {
-                        report_step_data.report[i].report[j].sizedeep[
-                          n
-                        ].amount += parseInt(report_data[j].sizedeep[k].amount);
-                        check = true;
-                        check_i + 2;
-                        break;
-                      } else {
-                        check = false;
-                      }
-                    }
-                    if (!check && check_i < check_n) {
-                      report_step_data.report[i].report[j].sizedeep.push({
-                        title: report_data[j].sizedeep[k].title,
-                        amount: parseInt(report_data[j].sizedeep[k].amount),
-                      });
-                      check_n - 2;
-                      check_i++;
-                      console.log(
-                        "test 1",
-                        report_step_data.report[i].report[j].sizedeep
-                      );
-                    }
-                  }
-                }
-              } else if (
-                !report_step_data.report[i].report[j].hasOwnProperty(
-                  "sizedeep"
-                ) &&
-                report_data[j].sizedeep
-              ) {
-                for (let k in report_data[j].sizedeep) {
-                  if (
-                    !report_step_data.report[i].report[j].hasOwnProperty(
-                      "sizedeep"
-                    )
-                  ) {
-                    report_step_data.report[i].report[j]["sizedeep"] = [
-                      {
-                        title: report_data[j].sizedeep[k].title,
-                        amount: parseInt(report_data[j].sizedeep[k].amount),
-                      },
-                    ];
-                    console.log(
-                      "test 2",
-                      report_step_data.report[i].report[j].sizedeep
-                    );
-                  } else {
-                    report_step_data.report[i].report[j].sizedeep.push({
-                      title: report_data[j].sizedeep[k].title,
-                      amount: parseInt(report_data[j].sizedeep[k].amount),
-                    });
-                    console.log(
-                      "test 3",
-                      report_step_data.report[i].report[j].sizedeep
-                    );
-                  }
-                }
-              }
-            }
-          }
-        }
-        //FUN END HERE KEKW
-      } else {
-        report_step_data.report.push({
+      if (!reportStepData.step_data[report_step_data].hasOwnProperty("report")) {
+        reportStepData.step_data[report_step_data].report = {
           at: new Date(),
           by: auth_username,
-          for: report_datetime,
-          report: report_data,
-          amount: total_amount,
-          amountpiecesdeep: total_amount_deep,
-        });
+          reports: [{
+            name: group_name,
+            size: group_size,
+            amount: parseInt(group_amount)
+          }],
+          total: parseInt(group_amount),
+        }
+      } else {
+        if (reportStepData.step_data[report_step_data].report) {
+          reportStepData.step_data[report_step_data].report.at = new Date()
+          reportStepData.step_data[report_step_data].report.by = auth_username
+          reportStepData.step_data[report_step_data].report.reports.push({
+            name: group_name,
+            size: group_size,
+            amount: parseInt(group_amount)
+          })
+          reportStepData.step_data[report_step_data].report.total += parseInt(group_amount)
+        }
       }
+
       $("#report-exam-modal").modal("hide");
-      await updateStepDataExam(report_quot, report_step_data, "none");
-      // console.log(report_step_data)
-      vm_status.stepDataTotalAmount(report_step_data);
+
+      await updateStepDataExam(report_quot, reportStepData.step_data[report_step_data], report_step_data);
+      vm_status.stepDataTotalAmount(reportStepData.step_data);
+      this.$refs['report_group_size_name_exam'].value = ""
     },
     close_report() {
       document.getElementById("report_exam_date").valueAsDate = new Date();
@@ -5061,8 +4839,8 @@ const vm_status_app = createApp({
         });
     },
     stepDataReport(quot, step_data) {
-      report_quot = quot;
-      report_step_data = step_data;
+      report = quot;
+      report_step = step_data;
 
       vm_form.size = Object.keys(quot.amountlist);
       vm_form.sorting_size();
@@ -5217,15 +4995,15 @@ window.vm_status = vm_status_app.mount("#vue-statusmodal"); //MAKE GLOBAL VARIBA
 //-------------------VUE INSTANCE FOR STATUS-------------------------------
 
 //--------------------------EDIT PLACEHOLDER-------------------------------
-const vm_edit_app = createApp({
-  data() {
-    return {};
-  },
-  methods: {
-    calcurrentstatus_deposit: calcurrentstatus_deposit,
-  },
-});
-window.vm_edit = vm_edit_app.mount("#vm-edit-placeholder");
+// const vm_edit_app = createApp({
+//   data() {
+//     return {};
+//   },
+//   methods: {
+//     calcurrentstatus_deposit: calcurrentstatus_deposit,
+//   },
+// });
+// window.vm_edit = vm_edit_app.mount("#vm-edit-placeholder");
 //--------------------------EDIT PLACEHOLDER-------------------------------
 
 
@@ -6376,12 +6154,12 @@ const mainView_app = createApp({
         } else {
           id = this.quotdata[i].id;
         }
-        
+
         if (fetch) {
           let res = await axios("/api/quotation/" + id);
           this.selectedData = _.cloneDeep(res.data);
           this.selectedData.i = i;
-  
+
           this.initData(this.selectedData);
         } else {
           this.selectedData = _.cloneDeep(this.quotdata[i]);
@@ -6392,7 +6170,7 @@ const mainView_app = createApp({
           let res = await axios("/api/quotation/" + i);
           this.selectedData = _.cloneDeep(res.data);
           this.selectedData.i = i;
-  
+
           this.initData(this.selectedData);
         } else {
           this.selectedData = _.cloneDeep(this.quotdata[i]);
@@ -6934,13 +6712,11 @@ const mainView_app = createApp({
     vm_status.ready = true;
     vm_status.$forceUpdate();
     this.loading = false;
-    
+
     if (showedit) {
-      this.selectData(showedit.replace(/^\s+|\s+$/gm,'')); 
+      this.selectData(showedit.replace(/^\s+|\s+$/gm, ''));
       this.viewMode = 'project';
-    } 
-    
-    
+    }
   },
 });
 mainView_app.component("select-2", select2).component("bs-modal", modal);
